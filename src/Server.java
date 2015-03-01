@@ -57,6 +57,9 @@ public class Server {
 		int len = 1024;
 		public UDPListener(){
 		}
+		synchronized void sendUDP(){
+			
+		}
 		@Override
 		public void run() {
 			try {
@@ -100,7 +103,7 @@ public class Server {
 		// input: config is a line formatted as: <z> <Pudp> <Ptcp>
 		String[] configList = config.split(" ");
 		int numBooks = Integer.parseInt(configList[0]);
-		for (int i = 0; i < numBooks; ++i){
+		for (int i = 1; i <= numBooks; ++i){
 			bookMap.put("b" + i,  AVAILABLE);
 		}
 		
@@ -127,23 +130,19 @@ public class Server {
 	}
 	public synchronized String processRequest(String request){
 		// expects "<clientid> <bookid> <directive>"... e.g. "c1 b8 reserve"
-		//System.out.println(request);
 		String[] requestSplit = request.split(" ");
 		String client = requestSplit[0].trim();
 		String book = requestSplit[1].trim();
 		String directive = requestSplit[2].trim();
-		//System.out.println("Directive: " + directive);
 		String status = bookMap.get(book);
 		String prefix = "";
 		if (status == null){
 			// book not listed
-			//System.out.println("Book not listed.");
 			prefix = FAIL;
 		}
 		else if (directive.equals(RETURN)){
 			// did the client have the book?
 			if (!status.equals(client)){
-				//System.out.println("Status was " + status + " but client was " + client);
 				prefix = FAIL;
 			} else {
 				bookMap.put(book,  AVAILABLE);
@@ -153,7 +152,6 @@ public class Server {
 		} else {
 			// is the book available?
 			if (!status.equals(AVAILABLE)){
-				// System.out.println("Book was unavailable. Status: " + status);
 				prefix = FAIL;
 			} else {
 				bookMap.put(book,  client);

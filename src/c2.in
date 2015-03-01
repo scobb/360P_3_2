@@ -1,0 +1,11 @@
+2 127.0.0.1
+b7 reserve 10000 T
+b8 reserve 9000 U
+b9 reserve 10000 T
+sleep 4000
+b7 return 10000 T
+b8 return 9000 U
+b9 return 10000 T
+b1 reserve 9000 U
+b2 reserve 9000 U
+b3 reserve 10000 T
