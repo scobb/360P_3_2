@@ -1,6 +1,9 @@
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.SocketException;
 import java.util.HashMap;
 import java.util.Map;
@@ -10,6 +13,44 @@ import java.util.concurrent.Executors;
 
 
 public class Server {
+	public class TCPHandler implements Runnable {
+		Socket socket;
+		public TCPHandler(Socket s){
+			this.socket = s;
+		}
+		@Override
+		public void run() {
+			try {
+				Scanner in = new Scanner(socket.getInputStream());
+				PrintWriter out = new PrintWriter(socket.getOutputStream());
+				String req = in.nextLine();
+				String resp = Server.this.processRequest(req);
+				out.println(resp);
+				out.flush();
+		        out.close();
+		        socket.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			} 
+		}
+	}
+	public class TCPListener implements Runnable{
+		public TCPListener(){};
+		@Override
+		public void run() {
+			Socket s;
+			try {
+				while ( (s = tcpSocket.accept()) != null) {
+					//System.out.println("Got TCP input.");
+					threadpool.submit(new TCPHandler(s));
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			
+		}
+		
+	}
 	public class UDPListener implements Runnable{
 		int port;
 		Server myServer;
@@ -42,8 +83,9 @@ public class Server {
 	}
 
 	private Map<String, String> bookMap; 
-	private int tcpPort;
-	DatagramSocket udpSocket;
+	private ServerSocket tcpSocket;
+	private DatagramSocket udpSocket;
+	ExecutorService threadpool;
 	private static final int INVALID = -1;
 	private final String RESERVE = "reserve";
 	private final String RETURN = "return";
@@ -52,7 +94,6 @@ public class Server {
 	private final String FREE = "free ";
 	public Server(){
 		bookMap = new HashMap<String, String>();
-		tcpPort = INVALID;
 	}
 	
 	public void parseConfig(String config) {
@@ -64,38 +105,45 @@ public class Server {
 		}
 		
 		int udpPort = Integer.parseInt(configList[1]);
-		tcpPort = Integer.parseInt(configList[2]);
+		int tcpPort = Integer.parseInt(configList[2]);
 		try {
 			udpSocket = new DatagramSocket(udpPort);
+			//System.out.println("Listening for UDP on : " + udpPort);
+			tcpSocket = new ServerSocket(tcpPort);
+			//System.out.println("Listening for TCP on : " + tcpPort);
 		} catch (SocketException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 	public void listen(){
 		UDPListener udp = new UDPListener();
-		ExecutorService threadpool = Executors.newCachedThreadPool();
+		threadpool = Executors.newCachedThreadPool();
 		threadpool.submit(udp);
+		TCPListener tcp = new TCPListener();
+		threadpool.submit(tcp);
 		while (true);
 	}
 	public synchronized String processRequest(String request){
 		// expects "<clientid> <bookid> <directive>"... e.g. "c1 b8 reserve"
-		System.out.println(request);
+		//System.out.println(request);
 		String[] requestSplit = request.split(" ");
 		String client = requestSplit[0].trim();
 		String book = requestSplit[1].trim();
 		String directive = requestSplit[2].trim();
-		System.out.println("Directive: " + directive);
+		//System.out.println("Directive: " + directive);
 		String status = bookMap.get(book);
 		String prefix = "";
 		if (status == null){
 			// book not listed
-			System.out.println("Book not listed.");
+			//System.out.println("Book not listed.");
 			prefix = FAIL;
 		}
 		else if (directive.equals(RETURN)){
 			// did the client have the book?
 			if (!status.equals(client)){
-				System.out.println("Status was " + status + " but client was " + client);
+				//System.out.println("Status was " + status + " but client was " + client);
 				prefix = FAIL;
 			} else {
 				bookMap.put(book,  AVAILABLE);
@@ -105,7 +153,7 @@ public class Server {
 		} else {
 			// is the book available?
 			if (!status.equals(AVAILABLE)){
-				System.out.println("Book was unavailable. Status: " + status);
+				// System.out.println("Book was unavailable. Status: " + status);
 				prefix = FAIL;
 			} else {
 				bookMap.put(book,  client);
