@@ -25,14 +25,24 @@ public class Client {
 	private InetAddress add;
 	private byte[] rbuffer = new byte[len];
 
+	// no-arg constructor
 	public Client() {
 		this.id = null;
 		this.add = null;
 	}
 
+	/** parseConfig
+	 * 
+	 * @param conf String to be parsed into a command and handled
+	 */
 	public void parseConfig(String conf) {
-		String[] confSplit = conf.split(" ");
+		// split based on whitespace
+		String[] confSplit = conf.split("\\s+");
+
+		// add c to the client number to be able to easily construct requests
 		this.id = "c" + confSplit[0];
+
+		// build address using ip submitted
 		try {
 			this.add = InetAddress.getByName(confSplit[1]);
 		} catch (UnknownHostException e) {
@@ -40,69 +50,99 @@ public class Client {
 		}
 	}
 
+	/**processCommand
+	 * 
+	 * @param cmd command string to be executed
+	 */
 	public void processCommand(String cmd) {
-		String[] cmdSplit = cmd.split(" ");
-		String book = cmdSplit[0];
-		String directive = cmdSplit[1];
-		if (book.equals(SLEEP)){
+		// split based on whitespace
+		String[] cmdSplit = cmd.split("\\s+");
+
+		// did we receive a sleep instruction?
+		if (cmdSplit[0].equals(SLEEP)) {
+			// if so, put the thread to sleep for the requested time
 			try {
-				Thread.sleep(Integer.parseInt(directive));
+				Thread.sleep(Integer.parseInt(cmdSplit[1]));
 			} catch (NumberFormatException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			return;
-		}
-		int port = Integer.parseInt(cmdSplit[2]);
-		String protocol = cmdSplit[3];
-		if (protocol.equals(UDP)) {
-			processUdp(book, directive, port);
 		} else {
-			processTcp(book, directive, port);
-		}
-
-	}
-
-	public void processTcp(String book, String directive, int port) {
-		String send = id + " " + book + " " + directive;
-		// System.out.println("send: " + send);
-		Socket s = null;
-		while (true){
-			try {
-				// System.out.println("adding socket on " + port);
-				s = new Socket(this.add, port);
-				Scanner in = new Scanner(s.getInputStream());
-				PrintWriter out = new PrintWriter(s.getOutputStream(), true);
-				out.println(send);
-				System.out.println(in.nextLine());
-				s.close();
-				in.close();
-				break;
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				// e.printStackTrace();
+			// any other command will have the same basic format
+			String book = cmdSplit[0];
+			String directive = cmdSplit[1];
+			int port = Integer.parseInt(cmdSplit[2]);
+			String protocol = cmdSplit[3];
+			
+			String request = id + " " + book + " " + directive;
+			// dependent on protocol, process in two different manners
+			if (protocol.equals(UDP)) {
+				processUdp(request, port);
+			} else {
+				processTcp(request, port);
 			}
 		}
 
 	}
 
-	public void processUdp(String book, String directive, int port) {
-		String send = id + " " + book + " " + directive;
-		// System.out.println("send: " + send);
+	/**
+	 * processTcp
+	 * @param send String request to send
+	 * @param port Port server will be listening on
+	 */
+	public void processTcp(String send, int port) {
+		Socket s = null;
+		try {
+			// talk to the server on the socket
+			s = new Socket(this.add, port);
+			
+			// we'll communicate through streams: scanner and printwriter
+			Scanner in = new Scanner(s.getInputStream());
+			PrintWriter out = new PrintWriter(s.getOutputStream(), true);
+			
+			// send request
+			out.println(send);
+			
+			// print response to stdout
+			System.out.println(in.nextLine());
+			
+			// clean up -- not sure if these are redundant. Stream closes if any is called.
+			s.close();
+			in.close();
+			out.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	/**processUdp
+	 * 
+	 * @param send String we'll send
+	 * @param port Integer port the server will be listening on
+	 */
+	public void processUdp(String send, int port) {
 		DatagramPacket sPacket, rPacket;
 		DatagramSocket datasocket;
 		try {
+			// declare new instance of socket
 			datasocket = new DatagramSocket();
+			
+			// convert string to byte array
 			byte[] buffer = send.getBytes();
+			
+			// build and send datagram packet
 			sPacket = new DatagramPacket(buffer, buffer.length, add, port);
 			datasocket.send(sPacket);
+			
+			// wait for response
 			rPacket = new DatagramPacket(rbuffer, rbuffer.length);
 			datasocket.receive(rPacket);
+			
+			// parse response into a string
 			String retstring = new String(rPacket.getData(), 0,
 					rPacket.getLength());
+			
+			// print string to stdout
 			System.out.println(retstring);
 		} catch (SocketException e) {
 			e.printStackTrace();
@@ -112,13 +152,20 @@ public class Client {
 	}
 
 	public static void main(String[] args) {
+		// build an empty client
 		Client c = new Client();
+		
+		// we'll be taking commands from standard in
 		Scanner sc = new Scanner(System.in);
+		
+		// configure using the first line of input
 		c.parseConfig(sc.nextLine());
+		
+		// go until user enters an empty line.
 		while (true) {
 			try {
 				c.processCommand(sc.nextLine());
-			} catch (NoSuchElementException e){
+			} catch (NoSuchElementException e) {
 				break;
 			}
 		}
